@@ -652,6 +652,66 @@ module.exports = {
       });
     });
   },
+
+  'test validation on a query result': function () {
+    mongoose.model('TestValidationOnResult', new Schema({
+        resultv: { type: String, required: true }
+    }));
+
+    var db = start()
+      , TestV = db.model('TestValidationOnResult');
+
+    var post = new TestV;
+
+    post.validate(function (err) {
+      err.should.be.an.instanceof(MongooseError);
+      err.should.be.an.instanceof(ValidatorError);
+
+      post.resultv = 'yeah';
+      post.save(function (err) {
+        should.strictEqual(err, null);
+        TestV.findOne({ _id: post.id }, function (err, found) {
+          should.strictEqual(err, null);
+          found.resultv.should.eql('yeah');
+          found.save(function(err){
+            should.strictEqual(err, null);
+            db.close();
+          })
+        });
+      });
+    })
+  },
+
+  'test required validation for previously existing null values': function () {
+    mongoose.model('TestPreviousNullValidation', new Schema({
+        previous: { type: String, required: true }
+      , a: String
+    }));
+
+    var db = start()
+      , TestP = db.model('TestPreviousNullValidation')
+
+    TestP.collection.insert({ a: null, previous: null}, {}, function (err, f) {
+      should.strictEqual(err, null);
+
+      TestP.findOne({_id: f[0]._id}, function (err, found) {
+        should.strictEqual(err, null);
+        found.isNew.should.be.false;
+        should.strictEqual(found.get('previous'), undefined);
+
+        found.validate(function(err){
+          err.should.be.an.instanceof(MongooseError);
+          err.should.be.an.instanceof(ValidatorError);
+
+          found.set('previous', 'yoyo');
+          found.save(function (err) {
+            should.strictEqual(err, null);
+            db.close();
+          });
+        })
+      })
+    });
+  },
   
   'test nested validation': function(){
     mongoose.model('TestNestedValidation', new Schema({
@@ -842,6 +902,8 @@ module.exports = {
 
     var post = new TestCallingValidation;
 
+    post.schema.path('item').isRequired.should.be.true;
+
     should.strictEqual(post.isNew, true);
 
     post.validate(function(err){
@@ -857,6 +919,25 @@ module.exports = {
       });
     });
 
+  },
+
+  'test setting required to false': function () {
+    function validator () {
+      return true;
+    }
+
+    mongoose.model('TestRequiredFalse', new Schema({
+      result: { type: String, validate: [validator, 'chump validator'], required: false }
+    }));
+
+    var db = start()
+      , TestV = db.model('TestRequiredFalse');
+
+    var post = new TestV;
+
+    post.schema.path('result').isRequired.should.be.false;
+
+    db.close();
   },
 
   'test defaults application': function(){
