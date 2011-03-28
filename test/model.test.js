@@ -117,6 +117,47 @@ module.exports = {
     db.close();
   },
 
+  'test default Array type casts to Mixed': function () {
+    var db = start()
+      , DefaultArraySchema = new Schema({
+          num1: Array
+        , num2: []
+        })
+
+    mongoose.model('DefaultArraySchema', DefaultArraySchema);
+    var DefaultArray = db.model('DefaultArraySchema', collection);
+    var arr = new DefaultArray();
+
+    arr.get('num1').should.have.length(0);
+    arr.get('num2').should.have.length(0);
+
+    var threw1 = false
+      , threw2 = false;
+
+    try {
+      arr.num1.push({ x: 1 })
+      arr.num1.push(9)
+      arr.num1.push("woah")
+    } catch (err) {
+      threw1 = true;
+    }
+
+    threw1.should.equal(false);
+
+    try {
+      arr.num2.push({ x: 1 })
+      arr.num2.push(9)
+      arr.num2.push("woah")
+    } catch (err) {
+      threw2 = true;
+    }
+
+    threw2.should.equal(false);
+
+    db.close();
+
+  },
+
   'test a model default structure that has a nested Array when instantiated': function () {
     var db = start()
       , NestedSchema = new Schema({
@@ -193,16 +234,41 @@ module.exports = {
     db.close();
   },
 
-//  'test instantiating a model with a hash that maps to at least 1 undefined value': function () {
-//    var db = start()
-//      , BlogPost = db.model('BlogPost', collection);
-//
-//    var post = new BlogPost({
-//      title: undefined
-//    });
-//    should.strictEqual(undefined, post.title);
-//    db.close();
-//  },
+  'saving a model with a null value should perpetuate that null value to the db': function () {
+    var db = start()
+      , BlogPost = db.model('BlogPost', collection);
+
+    var post = new BlogPost({
+      title: null
+    });
+    should.strictEqual(null, post.title);
+    post.save( function (err) {
+      should.strictEqual(err, null);
+      BlogPost.findById(post.id, function (err, found) {
+        db.close();
+        should.strictEqual(err, null);
+        should.strictEqual(found.title, null);
+      });
+    });
+  },
+
+  'test instantiating a model with a hash that maps to at least 1 undefined value': function () {
+    var db = start()
+      , BlogPost = db.model('BlogPost', collection);
+
+    var post = new BlogPost({
+      title: undefined
+    });
+    should.strictEqual(undefined, post.title);
+    post.save( function (err) {
+      should.strictEqual(null, err);
+      BlogPost.findById(post.id, function (err, found) {
+        db.close();
+        should.strictEqual(err, null);
+        should.strictEqual(found.title, undefined);
+      });
+    });
+  },
 
   'test a model structure when saved': function(){
     var db = start()
@@ -697,7 +763,7 @@ module.exports = {
       TestP.findOne({_id: f[0]._id}, function (err, found) {
         should.strictEqual(err, null);
         found.isNew.should.be.false;
-        should.strictEqual(found.get('previous'), undefined);
+        should.strictEqual(found.get('previous'), null);
 
         found.validate(function(err){
           err.should.be.an.instanceof(MongooseError);
@@ -953,6 +1019,22 @@ module.exports = {
     var post = new TestDefaults();
     post.get('date').should.be.an.instanceof(Date);
     (+post.get('date')).should.eql(now);
+    db.close();
+  },
+
+  'test "type" is allowed as a key': function(){
+    var now = Date.now();
+
+    mongoose.model('TestTypeDefaults', new Schema({
+        type: { type: String, default: 'YES!' }
+    }));
+
+    var db = start()
+      , TestDefaults = db.model('TestTypeDefaults');
+
+    var post = new TestDefaults();
+    post.get('type').should.be.a('string');
+    post.get('type').should.eql('YES!');
     db.close();
   },
 
@@ -1787,6 +1869,33 @@ module.exports = {
       });
     });
   },
+
+  // GH-267
+  'saving an embedded document twice should not push that doc onto the parent doc twice': function () {
+    var db = start()
+      , BlogPost = db.model('BlogPost', collection)
+      , post = new BlogPost();
+
+    post.comments.push({title: 'woot'});
+    post.save( function (err) {
+      should.strictEqual(err, null);
+      post.comments.should.have.length(1);
+      BlogPost.findById(post.id, function (err, found) {
+        should.strictEqual(err, null);
+        found.comments.should.have.length(1);
+        post.save( function (err) {
+          should.strictEqual(err, null);
+          post.comments.should.have.length(1);
+          BlogPost.findById(post.id, function (err, found) {
+            db.close();
+            should.strictEqual(err, null);
+            found.comments.should.have.length(1);
+          });
+        });
+      });
+    });
+  },
+
   'test filtering an embedded array by the id shortcut function': function () {
     var db = start()
       , BlogPost = db.model('BlogPost', collection);
@@ -2122,6 +2231,11 @@ module.exports = {
     person.set('name.full', 'The Situation');
     person.get('name.first').should.equal('The');
     person.get('name.last').should.equal('Situation');
+
+    person.name.full.should.equal('The Situation');
+    person.name.full = 'Michael Sorrentino';
+    person.name.first.should.equal('Michael');
+    person.name.last.should.equal('Sorrentino');
 
     db.close();
   },
@@ -2552,6 +2666,81 @@ module.exports = {
         db.close();
       });
     });
+  },
+
+  'test nested obj literal getter/setters': function () {
+    var db = start()
+      , BlogPost = db.model('BlogPost', collection);
+
+    var date = new Date;
+
+    var meta = {
+        date: date
+      , visitors: 5
+    };
+
+    var post = new BlogPost()
+    post.init({
+        meta: meta
+    });
+
+    post.get('meta').date.should.be.an.instanceof(Date);
+    post.meta.date.should.be.an.instanceof(Date);
+
+    var threw = false;
+    var getter1;
+    var getter2;
+    var strmet;
+    try {
+      strmet = JSON.stringify(meta);
+      getter1 = JSON.stringify(post.get('meta'));
+      getter2 = JSON.stringify(post.meta);
+    } catch (err) {
+      threw = true;
+    }
+
+    threw.should.be.false;
+    getter1.should.eql(strmet);
+    getter2.should.eql(strmet);
+
+    post.meta.date = new Date - 1000;
+    post.meta.date.should.be.an.instanceof(Date);
+    post.get('meta').date.should.be.an.instanceof(Date);
+
+    post.meta.visitors = 2;
+    post.get('meta').visitors.should.be.an.instanceof(MongooseNumber);
+    post.meta.visitors.should.be.an.instanceof(MongooseNumber);
+
+    var newmeta = {
+        date: date - 2000
+      , visitors: 234
+    };
+
+    post.set(newmeta, 'meta');
+
+    post.meta.date.should.be.an.instanceof(Date);
+    post.get('meta').date.should.be.an.instanceof(Date);
+    post.meta.visitors.should.be.an.instanceof(MongooseNumber);
+    post.get('meta').visitors.should.be.an.instanceof(MongooseNumber);
+    (+post.meta.date).should.eql(date - 2000);
+    (+post.get('meta').date).should.eql(date - 2000);
+    (+post.meta.visitors).should.eql(234);
+    (+post.get('meta').visitors).should.eql(234);
+
+    // set object directly
+    post.meta = newmeta;
+
+    post.meta.date.should.be.an.instanceof(Date);
+    post.get('meta').date.should.be.an.instanceof(Date);
+    post.meta.visitors.should.be.an.instanceof(MongooseNumber);
+    post.get('meta').visitors.should.be.an.instanceof(MongooseNumber);
+    (+post.meta.date).should.eql(date - 2000);
+    (+post.get('meta').date).should.eql(date - 2000);
+    (+post.meta.visitors).should.eql(234);
+    (+post.get('meta').visitors).should.eql(234);
+
+    db.close();
+
   }
 
 };

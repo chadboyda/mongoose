@@ -1,4 +1,56 @@
 
+1.1.13 / 2011-03-26
+===================
+
+  * Fixed setting values as `undefined`.
+
+1.1.12 / 2011-03-26
+===================
+
+  * Fixed; nested objects now convert to JSON properly
+  * Fixed; setting nested objects directly now works
+  * Update node-mongodb-native
+
+1.1.11 / 2011-03-25
+===================
+
+  * Fixed for use of `type` as a key.
+
+1.1.10 / 2011-03-23
+===================
+
+  * Changed; Make sure to only ensure indexes while connected
+
+1.1.9 / 2011-03-2 
+==================
+
+  * Fixed; Mixed can now default to empty arrays
+  * Fixed; keys by the name 'type' are now valid
+  * Fixed; null values retrieved from the database are hydrated as null values.
+  * Fixed repeated atomic operations when saving a same document twice.
+
+1.1.8 / 2011-03-23
+==================
+
+  * Fixed 'id' overriding. [bnoguchi]
+
+1.1.7 / 2011-03-22
+==================
+
+  * Fixed RegExp query casting when querying against an Array of Strings [bnoguchi]
+  * Fixed getters/setters for nested virtualsl. [bnoguchi]
+
+1.1.6 / 2011-03-22
+==================
+
+  * Only doValidate when path exists in Schema [aheckmann]
+  * Allow function defaults for Array types [aheckmann]
+  * Fix validation hang [aheckmann]
+  * Fix setting of isRequired of SchemaType [aheckmann]
+  * Fix SchemaType#required(false) filter [aheckmann]
+  * More backwards compatibility [aheckmann]
+  * More tests [aheckmann]
+
 1.1.5 / 2011-03-14
 ==================
 
