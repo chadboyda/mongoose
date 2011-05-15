@@ -1,4 +1,79 @@
 
+1.3.3 / 2011-04-27
+===================
+
+  * fixed; corrected query casting on nested mixed types
+
+1.3.2 / 2011-04-27
+===================
+
+  * fixed; query hints now retain key order
+
+1.3.1 / 2011-04-27
+===================
+
+  * fixed; setting a property on an embedded array no longer overwrites entire array (GH-310) 
+  * fixed; setting nested properties works when sibling prop is named "type"
+  * fixed; isModified is now much finer grained when .set() is used (GH-323)
+  * fixed; mongoose.model() and connection.model() now return the Model (GH-308, GH-305)
+  * fixed; can now use $gt, $lt, $gte, $lte with String schema types (GH-317)
+  * fixed; .lowercase() -> .toLowerCase() in pluralize()
+  * fixed; updating an embedded document by index works (GH-334)
+  * changed; .save() now passes the instance to the callback (GH-294, GH-264)
+  * added; can now query system.profile and system.indexes collections
+  * added; db.model('system.profile') is now included as a default Schema
+  * added; db.setProfiling(level, ms, callback)
+  * added; Query#hint() support
+  * added; more tests
+  * updated node-mongodb-native to 0.9.3
+
+1.3.0 / 2011-04-19
+===================
+
+  * changed; save() callbacks now fire only once on failed validation
+  * changed; Errors returned from save() callbacks now instances of ValidationError
+  * fixed; MongooseArray#indexOf now works properly
+
+1.2.0 / 2011-04-11
+===================
+
+  * changed; MongooseNumber now casts empty string to null
+
+1.1.25 / 2011-04-08
+===================
+
+  * fixed; post init now fires at proper time
+
+1.1.24 / 2011-04-03
+===================
+
+  * fixed; pushing an array onto an Array works on existing docs
+
+1.1.23 / 2011-04-01
+===================
+
+  * Added Model#model
+
+1.1.22 / 2011-03-31
+===================
+
+  * Fixed; $in queries on mixed types now work
+
+1.1.21 / 2011-03-31
+===================
+
+  * Fixed; setting object root to null/undefined works
+
+1.1.20 / 2011-03-31
+===================
+
+  * Fixed; setting multiple props on null field works
+
+1.1.19 / 2011-03-31
+===================
+
+  * Fixed; no longer using $set on paths to an unexisting fields
+
 1.1.18 / 2011-03-30
 ===================
 

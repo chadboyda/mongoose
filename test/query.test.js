@@ -3,7 +3,17 @@
  * Module dependencies.
  */
 
-var Query = require('mongoose/query');
+var Query = require('mongoose/query')
+  , start = require('./common')
+  , mongoose = start.mongoose
+  , DocumentObjectId = mongoose.Types.ObjectId
+  , Schema = mongoose.Schema
+
+var Product = new Schema({
+    tags: {} // mixed
+});
+
+mongoose.model('Product', Product);
 
 /**
  * Test.
@@ -525,12 +535,44 @@ module.exports = {
     threw.should.eql(false);
   },
 
+  'test casting an array set to mixed type works': function () {
+    var query = new Query();
+    var db = start();
+    var Product = db.model('Product');
+    var params = { _id: new DocumentObjectId, tags: { $in: [ 4, 8, 15, 16 ] }};
+
+    query.cast(Product, params);
+
+    params.tags.$in.should.eql([4,8,15,16]);
+    db.close();
+  },
+
   // Advanced Query options
-  
+
   'test Query#maxscan': function () {
     var query = new Query();
     query.maxscan(100);
     query.options.maxscan.should.equal(100);
+  },
+
+  'test Query#hint': function () {
+    var query = new Query();
+    query.hint('indexAttributeA', 1, 'indexAttributeB', -1);
+    query.options.hint.should.eql({'indexAttributeA': 1, 'indexAttributeB': -1});
+
+    var query2 = new Query();
+    query2.hint({'indexAttributeA': 1, 'indexAttributeB': -1});
+    query2.options.hint.should.eql({'indexAttributeA': 1, 'indexAttributeB': -1});
+
+    var query3 = new Query();
+    query3.hint('indexAttributeA');
+    query3.options.hint.should.eql({});
+  },
+
+  'test Query#snapshot': function () {
+    var query = new Query();
+    query.snapshot(true);
+    query.options.snapshot.should.be.true;
   },
 
   //  TODO
@@ -547,22 +589,9 @@ module.exports = {
 //    query.options.max.should.equal(100);
 //  },
 
-  // TODO Come back to this and make better
-//  'test Query#hint': function () {
-//    var query = new Query();
-//    query.hint('indexAttributeA', 'indexAttributeB');
-//    query.options.hint.should.equal('indexAttributeA', 'indexAttributeB');
-//  },
-
   // TODO
 //  'test Query#explain': function () {
 //  }
-
-  'test Query#snapshot': function () {
-    var query = new Query();
-    query.snapshot(true);
-    query.options.snapshot.should.be.true;
-  },
 
 //  'queries should be composable': function () {
 //    var q1 = new Query({name: 'hello'})

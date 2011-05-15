@@ -12,6 +12,7 @@ var start = require('./common')
   , SchemaType = mongoose.SchemaType
   , CastError = SchemaType.CastError
   , ValidatorError = SchemaType.ValidatorError
+  , ValidationError = mongoose.Document.ValidationError
   , ObjectId = Schema.ObjectId
   , DocumentObjectId = mongoose.Types.ObjectId
   , DocumentArray = mongoose.Types.DocumentArray
@@ -115,6 +116,19 @@ module.exports = {
     post.get('owners').should.be.an.instanceof(MongooseArray);
     post.get('comments').should.be.an.instanceof(DocumentArray);
     db.close();
+  },
+
+  'mongoose.model returns the model at creation': function () {
+    var Named = mongoose.model('Named', new Schema({ name: String }));
+    var n1 = new Named();
+    should.equal(n1.name, null);
+    var n2 = new Named({ name: 'Peter Bjorn' });
+    should.equal(n2.name, 'Peter Bjorn');
+
+    var schema = new Schema({ number: Number });
+    var Numbered = mongoose.model('Numbered', schema, collection);
+    var n3 = new Numbered({ number: 1234 });
+    n3.number.valueOf().should.equal(1234);
   },
 
   'test default Array type casts to Mixed': function () {
@@ -272,10 +286,33 @@ module.exports = {
 
   'test a model structure when saved': function(){
     var db = start()
-      , BlogPost = db.model('BlogPost', collection);
+      , BlogPost = db.model('BlogPost', collection)
+      , pending = 2;
+
+    function done () {
+      if (!--pending) db.close();
+    }
 
     var post = new BlogPost();
-    post.save(function(err){
+    post.on('save', function (post) {
+      post.get('_id').should.be.an.instanceof(DocumentObjectId);
+
+      should.equal(undefined, post.get('title'));
+      should.equal(undefined, post.get('slug'));
+      should.equal(undefined, post.get('date'));
+      should.equal(undefined, post.get('published'));
+
+      post.get('meta').should.be.a('object');
+      post.get('meta').should.eql({});
+      should.equal(undefined, post.get('meta.date'));
+      should.equal(undefined, post.get('meta.visitors'));
+
+      post.get('owners').should.be.an.instanceof(MongooseArray);
+      post.get('comments').should.be.an.instanceof(DocumentArray);
+      done();
+    });
+
+    post.save(function(err, post){
       should.strictEqual(err, null);
       post.get('_id').should.be.an.instanceof(DocumentObjectId);
 
@@ -291,7 +328,7 @@ module.exports = {
 
       post.get('owners').should.be.an.instanceof(MongooseArray);
       post.get('comments').should.be.an.instanceof(DocumentArray);
-      db.close();
+      done();
     });
   },
 
@@ -449,14 +486,31 @@ module.exports = {
     post.isModified('title').should.be.true;
 
     post.isModified('date').should.be.false;
-    post.set('date', Date.now());
+    post.set('date', new Date(post.date + 1));
     post.isModified('date').should.be.true;
 
     post.isModified('meta.date').should.be.false;
     db.close();
   },
 
-  'test isModified on a DocumentArray': function(){
+  'setting a key identically to its current value should not dirty the key': function () {
+    var db = start()
+      , BlogPost = db.model('BlogPost', collection);
+
+    var post = new BlogPost()
+    post.init({
+        title       : 'Test'
+      , slug        : 'test'
+      , date        : new Date
+    });
+
+    post.isModified('title').should.be.false;
+    post.set('title', 'Test');
+    post.isModified('title').should.be.false;
+    db.close();
+  },
+
+  'test isModified and isDirectModified on a DocumentArray': function(){
     var db = start()
       , BlogPost = db.model('BlogPost', collection);
 
@@ -467,9 +521,12 @@ module.exports = {
       , comments    : [ { title: 'Test', date: new Date, body: 'Test' } ]
     });
 
-    post.isModified('comments').should.be.false;
+    post.isModified('comments.0.title').should.be.false;
     post.get('comments')[0].set('title', 'Woot');
     post.isModified('comments').should.be.true;
+    post.isDirectModified('comments').should.be.false;
+    post.isModified('comments.0.title').should.be.true;
+    post.isDirectModified('comments.0.title').should.be.true;
 
     db.close();
   },
@@ -485,9 +542,12 @@ module.exports = {
       , comments    : [ { title: 'Test', date: new Date, body: 'Test' } ]
     });
 
-    post.isModified('comments').should.be.false;
+    post.isModified('comments.0.body').should.be.false;
     post.get('comments')[0].body = 'Woot';
     post.isModified('comments').should.be.true;
+    post.isDirectModified('comments').should.be.false;
+    post.isModified('comments.0.body').should.be.true;
+    post.isDirectModified('comments.0.body').should.be.true;
 
     db.close();
   },
@@ -517,6 +577,32 @@ module.exports = {
     post.get('owners').push(new DocumentObjectId);
 
     db.close();
+  },
+
+  // GH-342
+  'over-writing a number should persist to the db': function () {
+    var db = start()
+      , BlogPost = db.model('BlogPost', collection);
+
+    var post = new BlogPost({
+      meta: {
+          date      : new Date
+        , visitors  : 10
+      }
+    });
+
+    post.save( function (err) {
+      should.strictEqual(null, err);
+      post.set('meta.visitors', 20);
+      post.save( function (err) {
+        should.strictEqual(null, err);
+        BlogPost.findById(post.id, function (err, found) {
+          should.strictEqual(null, err);
+          found.get('meta.visitors').valueOf().should.equal(20);
+          db.close();
+        });
+      });
+    });
   },
 
   'test defining a new method': function(){
@@ -660,7 +746,7 @@ module.exports = {
 
     post.save(function(err){
       err.should.be.an.instanceof(MongooseError);
-      err.should.be.an.instanceof(ValidatorError);
+      err.should.be.an.instanceof(ValidationError);
 
       post.set('simple', 'here');
       post.save(function(err){
@@ -686,8 +772,9 @@ module.exports = {
 
     post.save(function(err){
       err.should.be.an.instanceof(MongooseError);
-      err.should.be.an.instanceof(ValidatorError);
-      err.message.should.equal('Validator "must be abc" failed for path simple');
+      err.should.be.an.instanceof(ValidationError);
+      err.errors.simple.should.equal('Validator "must be abc" failed for path simple');
+      post.errors.simple.should.equal('Validator "must be abc" failed for path simple');
 
       post.set('simple', 'abc');
       post.save(function(err){
@@ -709,13 +796,52 @@ module.exports = {
 
     post.save(function(err){
       err.should.be.an.instanceof(MongooseError);
-      err.should.be.an.instanceof(ValidatorError);
+      err.should.be.an.instanceof(ValidationError);
 
       post.set('simple', 'here');
       post.save(function(err){
         should.strictEqual(err, null);
         db.close();
       });
+    });
+  },
+
+  // GH-319
+  'save callback should only execute once regardless of number of failed validations': function () {
+    mongoose.model('CallbackFiresOnceValidation', new Schema({
+        username: { type: String, validate: /^[a-z]{6}$/i }
+      , email: { type: String, validate: /^[a-z]{6}$/i }
+      , password: { type: String, validate: /^[a-z]{6}$/i }
+    }));
+
+    var db = start()
+      , CallbackFiresOnceValidation = db.model('CallbackFiresOnceValidation');
+
+    var post = new CallbackFiresOnceValidation({
+        username: "nope"
+      , email: "too"
+      , password: "short"
+    });
+
+    var timesCalled = 0;
+
+    post.save(function (err) {
+      err.should.be.an.instanceof(MongooseError);
+      err.should.be.an.instanceof(ValidationError);
+
+      (++timesCalled).should.eql(1);
+
+      (Object.keys(err.errors).length).should.eql(3);
+      err.errors.password.should.eql('Validator failed for path password');
+      err.errors.email.should.eql('Validator failed for path email');
+      err.errors.username.should.eql('Validator failed for path username');
+
+      (Object.keys(post.errors).length).should.eql(3);
+      post.errors.password.should.eql('Validator failed for path password');
+      post.errors.email.should.eql('Validator failed for path email');
+      post.errors.username.should.eql('Validator failed for path username');
+
+      db.close();
     });
   },
 
@@ -731,7 +857,7 @@ module.exports = {
 
     post.validate(function (err) {
       err.should.be.an.instanceof(MongooseError);
-      err.should.be.an.instanceof(ValidatorError);
+      err.should.be.an.instanceof(ValidationError);
 
       post.resultv = 'yeah';
       post.save(function (err) {
@@ -767,7 +893,7 @@ module.exports = {
 
         found.validate(function(err){
           err.should.be.an.instanceof(MongooseError);
-          err.should.be.an.instanceof(ValidatorError);
+          err.should.be.an.instanceof(ValidationError);
 
           found.set('previous', 'yoyo');
           found.save(function (err) {
@@ -794,7 +920,7 @@ module.exports = {
 
     post.save(function(err){
       err.should.be.an.instanceof(MongooseError);
-      err.should.be.an.instanceof(ValidatorError);
+      err.should.be.an.instanceof(ValidationError);
 
       post.set('nested.required', 'here');
       post.save(function(err){
@@ -822,7 +948,8 @@ module.exports = {
 
     post.save(function(err){
       err.should.be.an.instanceof(MongooseError);
-      err.should.be.an.instanceof(ValidatorError);
+      err.should.be.an.instanceof(ValidationError);
+      err.errors.required.should.eql('Validator "required" failed for path required');
 
       post.get('items')[0].set('required', true);
       post.save(function(err){
@@ -853,7 +980,8 @@ module.exports = {
 
     post.save(function(err){
       err.should.be.an.instanceof(MongooseError);
-      err.should.be.an.instanceof(ValidatorError);
+      err.should.be.an.instanceof(ValidationError);
+      err.errors.async.should.eql('Validator "async validator" failed for path async');
       executed.should.be.true;
       executed = false;
 
@@ -875,7 +1003,7 @@ module.exports = {
         fn(v !== 'test');
       }, 50);
     };
-    
+
     mongoose.model('TestNestedAsyncValidation', new Schema({
         nested: {
             async: { type: String, validate: [validator, 'async validator'] }
@@ -890,13 +1018,13 @@ module.exports = {
 
     post.save(function(err){
       err.should.be.an.instanceof(MongooseError);
-      err.should.be.an.instanceof(ValidatorError);
+      err.should.be.an.instanceof(ValidationError);
       executed.should.be.true;
       executed = false;
 
       post.validate(function(err){
         err.should.be.an.instanceof(MongooseError);
-        err.should.be.an.instanceof(ValidatorError);
+        err.should.be.an.instanceof(ValidationError);
         executed.should.be.true;
         executed = false;
 
@@ -944,7 +1072,7 @@ module.exports = {
 
     post.save(function(err){
       err.should.be.an.instanceof(MongooseError);
-      err.should.be.an.instanceof(ValidatorError);
+      err.should.be.an.instanceof(ValidationError);
       executed.should.be.true;
       executed = false;
 
@@ -974,7 +1102,7 @@ module.exports = {
 
     post.validate(function(err){
       err.should.be.an.instanceof(MongooseError);
-      err.should.be.an.instanceof(ValidatorError);
+      err.should.be.an.instanceof(ValidationError);
       should.strictEqual(post.isNew, true);
 
       post.item = 'yo';
@@ -1076,7 +1204,7 @@ module.exports = {
     (+post.get('items')[0].get('date')).should.eql(now);
     db.close();
   },
-  
+
   // TODO: adapt this text to handle a getIndexes callback that's not unique to
   // the mongodb-native driver.
   'test that indexes are ensured when the model is compiled': function(){
@@ -1088,10 +1216,8 @@ module.exports = {
 
     Indexed.index({ last: 1, email: 1 }, { unique: true });
 
-    mongoose.model('IndexedModel', Indexed);
-
     var db = start()
-      , IndexedModel = db.model('IndexedModel', 'indexedmodel' + random())
+      , IndexedModel = db.model('IndexedModel', Indexed, 'indexedmodel' + random())
       , assertions = 0;
 
     IndexedModel.on('index', function(){
@@ -1126,16 +1252,14 @@ module.exports = {
       , blogposts   : [BlogPosts]
     });
 
-    mongoose.model('DeepIndexedModel', User);
-
     var db = start()
-      , UserModel = db.model('DeepIndexedModel', 'deepindexedmodel' + random())
+      , UserModel = db.model('DeepIndexedModel', User, 'deepindexedmodel' + random())
       , assertions = 0;
 
     UserModel.on('index', function () {
       UserModel.collection.getIndexes(function (err, indexes) {
         should.strictEqual(err, null);
-        
+
         for (var i in indexes)
           indexes[i].forEach(function(index){
             if (index[0] == 'name')
@@ -1148,6 +1272,42 @@ module.exports = {
 
         assertions.should.eql(3);
         db.close();
+      });
+    });
+  },
+
+  'compound indexes on embedded documents should be created': function () {
+    var BlogPosts = new Schema({
+        title   : String
+      , desc    : String
+    });
+
+    BlogPosts.index({ title: 1, desc: 1 });
+
+    var User = new Schema({
+        name        : { type: String, index: true }
+      , blogposts   : [BlogPosts]
+    });
+
+    var db = start()
+      , UserModel = db.model('DeepCompoundIndexModel', User, 'deepcompoundindexmodel' + random())
+      , found = 0;
+
+    UserModel.on('index', function () {
+      UserModel.collection.getIndexes(function (err, indexes) {
+        should.strictEqual(err, null);
+
+        for (var index in indexes) {
+          switch (index) {
+            case 'name_1':
+            case 'blogposts.title_1_blogposts.desc_1':
+              ++found;
+              break;
+          }
+        }
+
+        db.close();
+        found.should.eql(2);
       });
     });
   },
@@ -1175,6 +1335,41 @@ module.exports = {
     post.author.name.should.eql('A');
 
     db.close();
+  },
+
+  'test post save middleware': function () {
+    var schema = new Schema({
+        title: String
+    });
+
+    var called = 0;
+
+    schema.post('save', function (obj) {
+      obj.title.should.eql('Little Green Running Hood');
+      called.should.equal(0);
+      called++;
+    });
+
+    schema.post('save', function (obj) {
+      obj.title.should.eql('Little Green Running Hood');
+      called.should.equal(1);
+      called++;
+    });
+
+    schema.post('save', function (obj) {
+      obj.title.should.eql('Little Green Running Hood');
+      called.should.equal(2);
+      db.close();
+    });
+
+    var db = start()
+      , TestMiddleware = db.model('TestPostSaveMiddleware', schema);
+
+    var test = new TestMiddleware({ title: 'Little Green Running Hood'});
+
+    test.save(function(err){
+      should.strictEqual(err, null);
+    });
   },
 
   'test middleware': function () {
@@ -1221,6 +1416,44 @@ module.exports = {
         should.strictEqual(err, null);
         called.should.eql(3);
         db.close();
+      });
+    });
+  },
+
+  'test post init middleware': function () {
+    var schema = new Schema({
+        title: String
+    });
+
+    var preinit = 0
+      , postinit = 0
+
+    schema.pre('init', function (next) {
+      ++preinit;
+      next();
+    });
+
+    schema.post('init', function () {
+      ++postinit;
+    });
+
+    mongoose.model('TestPostInitMiddleware', schema);
+
+    var db = start()
+      , Test = db.model('TestPostInitMiddleware');
+
+    var test = new Test({ title: "banana" });
+
+    test.save(function(err){
+      should.strictEqual(err, null);
+
+      Test.findById(test._id, function (err, test) {
+        should.strictEqual(err, null);
+        preinit.should.eql(1);
+        postinit.should.eql(1);
+        test.remove(function(err){
+          db.close();
+        });
       });
     });
   },
@@ -1507,6 +1740,39 @@ module.exports = {
     });
   },
 
+  // GH-310
+  'test setting a subdocument atomically': function () {
+    var db = start()
+      , BlogPost = db.model('BlogPost', collection)
+
+    BlogPost.create({
+      comments: [{ title: 'first-title', body: 'first-body'}]
+    }, function (err, blog) {
+      should.strictEqual(null, err);
+      BlogPost.findById(blog.id, function (err, agent1blog) {
+        should.strictEqual(null, err);
+        BlogPost.findById(blog.id, function (err, agent2blog) {
+          should.strictEqual(null, err);
+          agent1blog.get('comments')[0].title = 'second-title';
+          agent1blog.save( function (err) {
+            should.strictEqual(null, err);
+            agent2blog.get('comments')[0].body = 'second-body';
+            agent2blog.save( function (err) {
+              should.strictEqual(null, err);
+              BlogPost.findById(blog.id, function (err, foundBlog) {
+                should.strictEqual(null, err);
+                db.close();
+                var comment = foundBlog.get('comments')[0];
+                comment.title.should.eql('second-title');
+                comment.body.should.eql('second-body');
+              });
+            });
+          });
+        });
+      });
+    });
+  },
+
   'test doubly nested array saving and loading': function(){
     var Inner = new Schema({
         arr: [Number]
@@ -1534,11 +1800,11 @@ module.exports = {
           should.strictEqual(err, null);
           found.get('_id').should.be.an.instanceof(DocumentObjectId);
           Outer.findById(found.get('_id'), function(err, found2) {
+            db.close();
             should.strictEqual(err, null);
             should.equal(1, found2.inner.length);
             should.equal(1, found2.inner[0].arr.length);
             should.equal(5, found2.inner[0].arr[0]);
-            db.close();
           });
         });
       });
@@ -1870,6 +2136,35 @@ module.exports = {
     });
   },
 
+  // GH-334
+  'test updating an embedded array document to an Object value': function () {
+    var db = start()
+      , SubSchema = new Schema({ 
+          name : String , 
+          subObj : { subName : String } 
+        });
+    var GH334Schema = new Schema ({ name : String , arrData : [ SubSchema] });
+
+    mongoose.model('GH334' , GH334Schema);
+    var AModel = db.model('GH334');
+    var instance = new AModel();
+
+    instance.set( { name : 'name-value' , arrData : [ { name : 'arrName1' , subObj : { subName : 'subName1' } } ] });
+    instance.save(function(err)  {
+        AModel.findById(instance.id, function(err, doc)  {
+          doc.arrData[0].set('subObj' , { subName : 'modified subName' });
+          doc.save(function(err)  {
+            should.strictEqual(null, err);
+            AModel.findById(instance.id, function (err, doc) {
+              db.close();
+              should.strictEqual(null, err);
+              doc.arrData[0].subObj.subName.should.eql('modified subName');
+            });
+          });
+       });
+    });
+  },
+
   // GH-267
   'saving an embedded document twice should not push that doc onto the parent doc twice': function () {
     var db = start()
@@ -2032,6 +2327,7 @@ module.exports = {
 
             Array.isArray(doc.mixed).should.be.true;
             doc.mixed.push({ hello: 'world' });
+            doc.mixed.push([ 'foo', 'bar' ]);
             doc.commit('mixed');
 
             doc.save(function (err, doc) {
@@ -2042,6 +2338,7 @@ module.exports = {
 
                 doc.mixed[0].should.eql({ foo: 'bar' });
                 doc.mixed[1].should.eql({ hello: 'world' });
+                doc.mixed[2].should.eql(['foo','bar']);
                 --count || db.close();
               });
             });
@@ -2351,7 +2648,7 @@ module.exports = {
       , email : { type: String, unique: true }
     });
 
-    mongoose.model('SafeHuman', Human);
+    mongoose.model('SafeHuman', Human, true);
 
     var db = start()
       , Human = db.model('SafeHuman', 'safehuman' + random());
@@ -2363,7 +2660,7 @@ module.exports = {
 
     me.save(function (err) {
       should.strictEqual(err, null);
-      
+
       Human.findById(me._id, function (err, doc){
         should.strictEqual(err, null);
         doc.email.should.eql('rauchg@gmail.com');
@@ -2391,7 +2688,7 @@ module.exports = {
     // turn it off
     Human.set('safe', false);
 
-    mongoose.model('UnsafeHuman', Human);
+    mongoose.model('UnsafeHuman', Human, true);
 
     var db = start()
       , Human = db.model('UnsafeHuman', 'unsafehuman' + random());
@@ -2403,7 +2700,7 @@ module.exports = {
 
     me.save(function (err) {
       should.strictEqual(err, null);
-      
+
       Human.findById(me._id, function (err, doc){
         should.strictEqual(err, null);
         doc.email.should.eql('rauchg@gmail.com');
@@ -2713,8 +3010,10 @@ module.exports = {
     }
 
     threw.should.be.false;
-    getter1.should.eql(strmet);
-    getter2.should.eql(strmet);
+    getter1 = JSON.parse(getter1);
+    getter2 = JSON.parse(getter2);
+    getter1.visitors.should.eql(getter2.visitors);
+    getter1.date.should.eql(getter2.date);
 
     post.meta.date = new Date - 1000;
     post.meta.date.should.be.an.instanceof(Date);
@@ -2809,12 +3108,13 @@ module.exports = {
     })
   },
 
-  're-saving existing object with existing null nested object works': function(){
+  're-saving object with pre-existing null nested object': function(){
     var db = start()
 
     var schema = new Schema({
       nest: {
-        st: String
+          st: String
+        , yep: String
       }
     });
 
@@ -2826,16 +3126,159 @@ module.exports = {
     t.save(function (err) {
       should.strictEqual(err, null);
 
-      t.nest = { st: "jsconf rules" };
+      t.nest = { st: "jsconf rules", yep: "it does" };
       t.save(function (err) {
         should.strictEqual(err, null);
 
         T.findById(t.id, function (err, t) {
           should.strictEqual(err, null);
           t.nest.st.should.eql("jsconf rules");
-          db.close();
-        })
+          t.nest.yep.should.eql("it does");
+
+          t.nest = null;
+          t.save(function (err) {
+            should.strictEqual(err, null);
+            should.strictEqual(t.doc.nest, null);
+            db.close();
+          });
+        });
+      });
+    });
+  },
+
+  'pushing to a nested array of Mixed works on existing doc': function () {
+    var db = start();
+
+    mongoose.model('MySchema', new Schema({
+      nested: {
+        arrays: []
+      }
+    }));
+
+    var DooDad = db.model('MySchema')
+      , doodad = new DooDad({ nested: { arrays: [] } })
+      , date = 1234567890;
+
+    doodad.nested.arrays.push(["+10", "yup", date]);
+
+    doodad.save(function (err) {
+      should.strictEqual(err, null);
+
+      DooDad.findById(doodad._id, function (err, doodad) {
+        should.strictEqual(err, null);
+
+        doodad.nested.arrays.toObject().should.eql([['+10','yup',date]]);
+
+        doodad.nested.arrays.push(["another", 1]);
+
+        doodad.save(function (err) {
+          should.strictEqual(err, null);
+
+          DooDad.findById(doodad._id, function (err, doodad) {
+            should.strictEqual(err, null);
+
+            doodad
+            .nested
+            .arrays
+            .toObject()
+            .should.eql([['+10','yup',date], ["another", 1]]);
+
+            db.close();
+          });
+        });
       })
+    });
+
+  },
+
+  'directly setting nested props works when property is named "type"': function () {
+    var db = start();
+
+    function def () {
+      return [{ x: 1 }, { x: 2 }, { x:3 }]
+    }
+
+    mongoose.model('MySchema2', new Schema({
+      nested: {
+          type: { type: String, default: 'yep' }
+        , array: {
+            type: Array, default: def
+          }
+      }
+    }));
+
+    var DooDad = db.model('MySchema2', collection)
+      , doodad = new DooDad()
+
+    doodad.save(function (err) {
+      should.strictEqual(err, null);
+
+      DooDad.findById(doodad._id, function (err, doodad) {
+        should.strictEqual(err, null);
+
+        doodad.nested.type.should.eql("yep");
+        doodad.nested.array.toObject().should.eql([{x:1},{x:2},{x:3}]);
+
+        doodad.nested.type = "nope";
+        doodad.nested.array = ["some", "new", "stuff"];
+
+        doodad.save(function (err) {
+          should.strictEqual(err, null);
+
+          DooDad.findById(doodad._id, function (err, doodad) {
+            should.strictEqual(err, null);
+            db.close();
+
+            doodad.nested.type.should.eql("nope");
+
+            doodad
+            .nested
+            .array
+            .toObject()
+            .should.eql(["some", "new", "stuff"]);
+
+          });
+        });
+      })
+    });
+  },
+
+  'system.profile should be a default model': function () {
+    var Profile = mongoose.model('system.profile');
+    Profile.schema.paths.ts.should.be.a('object');
+    Profile.schema.paths.info.should.be.a('object');
+    Profile.schema.paths.millis.should.be.a('object');
+
+    var db = start();
+    Profile = db.model('system.profile');
+    Profile.schema.paths.ts.should.be.a('object');
+    Profile.schema.paths.info.should.be.a('object');
+    Profile.schema.paths.millis.should.be.a('object');
+    db.close();
+  },
+
+  'setting profiling levels': function () {
+    var db = start();
+    db.on('open', function () {
+      db.setProfiling(3, function (err) {
+        err.message.should.eql('Invalid profiling level: 3');
+        db.setProfiling('fail', function (err) {
+          err.message.should.eql('Invalid profiling level: fail');
+          db.setProfiling(2, function (err, doc) {
+            should.strictEqual(err, null);
+            db.setProfiling(1, 50, function (err, doc) {
+              should.strictEqual(err, null);
+              doc.was.should.eql(2);
+              db.setProfiling(0, function (err, doc) {
+                db.close();
+                should.strictEqual(err, null);
+                doc.was.should.eql(1);
+                doc.slowms.should.eql(50);
+              });
+            });
+          });
+        });
+      });
     })
   }
 };

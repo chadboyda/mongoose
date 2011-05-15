@@ -56,26 +56,21 @@ module.exports = {
   'test that find returns a Query': function () {
     var db = start()
       , BlogPostB = db.model('BlogPostB', collection);
-    
+
     // query
     BlogPostB.find({}).should.be.an.instanceof(Query);
-//    BlogPostB.find({}).executed.should.be.false;
 
     // query, fields
     BlogPostB.find({}, {}).should.be.an.instanceof(Query);
-//    BlogPostB.find({}, {}).executed.should.be.false;
 
     // query, fields (array)
     BlogPostB.find({}, []).should.be.an.instanceof(Query);
-//    BlogPostB.find({}, []).executed.should.be.false;
 
     // query, fields, options
     BlogPostB.find({}, {}, {}).should.be.an.instanceof(Query);
-//    BlogPostB.find({}, {}, {}).executed.should.be.false;
 
     // query, fields (array), options
     BlogPostB.find({}, [], {}).should.be.an.instanceof(Query);
-//    BlogPostB.find({}, [], {}).executed.should.be.false;
 
     db.close();
   },
@@ -83,26 +78,21 @@ module.exports = {
   'test that findOne returns a Query': function () {
     var db = start()
       , BlogPostB = db.model('BlogPostB', collection);
-    
+
     // query
     BlogPostB.findOne({}).should.be.an.instanceof(Query);
-//    BlogPostB.findOne({}).executed.should.be.false;
 
     // query, fields
     BlogPostB.findOne({}, {}).should.be.an.instanceof(Query);
-//    BlogPostB.findOne({}, {}).executed.should.be.false;
 
     // query, fields (array)
     BlogPostB.findOne({}, []).should.be.an.instanceof(Query);
-//    BlogPostB.findOne({}, []).executed.should.be.false;
 
     // query, fields, options
     BlogPostB.findOne({}, {}, {}).should.be.an.instanceof(Query);
-//    BlogPostB.findOne({}, {}, {}).executed.should.be.false;
 
     // query, fields (array), options
     BlogPostB.findOne({}, [], {}).should.be.an.instanceof(Query);
-//    BlogPostB.findOne({}, [], {}).executed.should.be.false;
 
     db.close();
   },
@@ -122,64 +112,52 @@ module.exports = {
     var db = start()
       , BlogPostB = db.model('BlogPostB', collection)
       , count = 5
-//      , count = 10
       , q =  { _id: new DocumentObjectId }; // make sure the query is fast
 
     function fn () {
       --count || db.close();
     };
-    
+
     // query
     BlogPostB.find(q, fn).should.be.an.instanceof(Query);
-//    BlogPostB.find(q, fn).executed.should.be.true;
 
     // query, fields
     BlogPostB.find(q, {}, fn).should.be.an.instanceof(Query);
-//    BlogPostB.find(q, {}, fn).executed.should.be.true;
 
     // query, fields (array)
     BlogPostB.find(q, [], fn).should.be.an.instanceof(Query);
-//    BlogPostB.find(q, [], fn).executed.should.be.true;
 
     // query, fields, options
     BlogPostB.find(q, {}, {}, fn).should.be.an.instanceof(Query);
-//    BlogPostB.find(q, {}, {}, fn).executed.should.be.true;
 
     // query, fields (array), options
     BlogPostB.find(q, [], {}, fn).should.be.an.instanceof(Query);
-//    BlogPostB.find(q, [], {}, fn).executed.should.be.true;
   },
 
   'test that query is executed where a callback for findOne': function () {
     var db = start()
       , BlogPostB = db.model('BlogPostB', collection)
       , count = 5
-//      , count = 10
       , q =  { _id: new DocumentObjectId }; // make sure the query is fast
 
     function fn () {
       --count || db.close();
     };
-    
+
     // query
     BlogPostB.findOne(q, fn).should.be.an.instanceof(Query);
-//    BlogPostB.findOne(q, fn).executed.should.be.true;
 
     // query, fields
     BlogPostB.findOne(q, {}, fn).should.be.an.instanceof(Query);
-//    BlogPostB.findOne(q, {}, fn).executed.should.be.true;
 
     // query, fields (array)
     BlogPostB.findOne(q, [], fn).should.be.an.instanceof(Query);
-//    BlogPostB.findOne(q, [], fn).executed.should.be.true;
 
     // query, fields, options
     BlogPostB.findOne(q, {}, {}, fn).should.be.an.instanceof(Query);
-//    BlogPostB.findOne(q, {}, {}, fn).executed.should.be.true;
 
     // query, fields (array), options
     BlogPostB.findOne(q, [], {}, fn).should.be.an.instanceof(Query);
-//    BlogPostB.findOne(q, [], {}, fn).executed.should.be.true;
   },
 
   'test that count returns a Query': function () {
@@ -187,7 +165,6 @@ module.exports = {
       , BlogPostB = db.model('BlogPostB', collection);
 
     BlogPostB.count({}).should.be.an.instanceof(Query);
-//    BlogPostB.count({}).executed.should.be.false;
 
     db.close();
   },
@@ -196,14 +173,12 @@ module.exports = {
     var db = start()
       , BlogPostB = db.model('BlogPostB', collection)
       , count = 1;
-//      , count = 2;
 
     function fn () {
       --count || db.close();
     };
 
     BlogPostB.count({}, fn).should.be.an.instanceof(Query);
-//    BlogPostB.count({}, fn).executed.should.be.true;
   },
 
   'test that update returns a Query': function () {
@@ -211,10 +186,7 @@ module.exports = {
       , BlogPostB = db.model('BlogPostB', collection);
 
     BlogPostB.update({}, {}).should.be.an.instanceof(Query);
-//    BlogPostB.update({}, {}).executed.should.be.false;
-
     BlogPostB.update({}, {}, {}).should.be.an.instanceof(Query);
-//    BlogPostB.update({}, {}, {}).executed.should.be.false;
 
     db.close();
   },
@@ -223,17 +195,14 @@ module.exports = {
     var db = start()
       , BlogPostB = db.model('BlogPostB', collection)
       , count = 2;
-//      , count = 4;
 
     function fn () {
       --count || db.close();
     };
 
     BlogPostB.update({title: random()}, {}, fn).should.be.an.instanceof(Query);
-//    BlogPostB.update({title: random()}, {}, fn).executed.should.be.true;
 
     BlogPostB.update({title: random()}, {}, {}, fn).should.be.an.instanceof(Query);
-//    BlogPostB.update({title: random()}, {}, {}, fn).executed.should.be.true;
   },
 
   'test finding a document': function () {
@@ -1155,5 +1124,87 @@ module.exports = {
       });
     });
   },
-  // IDIOMATIC SYNTAX TESTS
+
+  '$gt, $lt, $lte, $gte work on strings': function () {
+    var db = start()
+    var D = db.model('D', new Schema({dt: String}), collection);
+
+    D.create({ dt: '2011-03-30' }, done);
+    D.create({ dt: '2011-03-31' }, done);
+    D.create({ dt: '2011-04-01' }, done);
+    D.create({ dt: '2011-04-02' }, done);
+
+    var pending = 3;
+    function done (err) {
+      if (err) db.close();
+      should.strictEqual(err, null);
+
+      if (--pending) return;
+
+      pending = 2;
+
+      D.find({ 'dt': { $gte: '2011-03-30', $lte: '2011-04-01' }}).sort('dt', 1).run(function (err, docs) {
+        if (--pending) db.close();
+        should.strictEqual(err, null);
+        docs.length.should.eql(3);
+        docs[0].dt.should.eql('2011-03-30');
+        docs[1].dt.should.eql('2011-03-31');
+        docs[2].dt.should.eql('2011-04-01');
+        docs.some(function (d) { return '2011-04-02' === d.dt }).should.be.false;
+      });
+
+      D.find({ 'dt': { $gt: '2011-03-30', $lt: '2011-04-02' }}).sort('dt', 1).run(function (err, docs) {
+        if (--pending) db.close();
+        should.strictEqual(err, null);
+        docs.length.should.eql(2);
+        docs[0].dt.should.eql('2011-03-31');
+        docs[1].dt.should.eql('2011-04-01');
+        docs.some(function (d) { return '2011-03-30' === d.dt }).should.be.false;
+        docs.some(function (d) { return '2011-04-02' === d.dt }).should.be.false;
+      });
+    }
+  },
+
+  'nested mixed queries (x.y.z)': function () {
+    var db = start()
+      , BlogPostB = db.model('BlogPostB', collection);
+
+    BlogPostB.find({ 'mixed.nested.stuff': 'skynet' }, function (err, docs) {
+      db.close();
+      should.strictEqual(err, null);
+    });
+  },
+
+  // GH-336
+  'finding by Date field works': function () {
+    var db = start()
+      , Test = db.model('TestDateQuery', new Schema({ date: Date }), collection)
+      , now = new Date;
+
+    Test.create({ date: now }, function (err) {
+      Test.find({ date: now }, function (err, docs) {
+        db.close();
+        should.strictEqual(err, null);
+        docs.length.should.equal(1);
+      });
+    });
+  },
+
+  // GH-309
+  'using $near with Arrays works (geo-spatial)': function () {
+    var db = start()
+      , schema = new Schema({ loc: { type: Array, index: '2d'}})
+      , Test = db.model('GeoSpatialArrayQuery', schema, collection);
+
+    Test.create({ loc: [ 10, 20 ]}, { loc: [ 40, 90 ]}, function (err) {
+      should.strictEqual(err, null);
+      Test.find({ loc: { $near: [30, 40] }}, function (err, docs) {
+        db.close();
+        should.strictEqual(err, null);
+        docs.length.should.equal(2);
+      });
+    });
+
+  }
+
 };

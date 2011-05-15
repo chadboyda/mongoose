@@ -334,6 +334,10 @@ module.exports = {
     Loki.path('owner').doValidate(null, function(err){
       err.should.be.an.instanceof(ValidatorError);
     });
+
+    Loki.path('owner').doValidate(undefined, function(err){
+      err.should.be.an.instanceof(ValidatorError);
+    });
   },
 
   'test object id casting': function(){
@@ -764,6 +768,11 @@ module.exports = {
 
   'test GH-298 - The default creation of a virtual `id` should be muted when someone defines their own `id` attribute': function () {
     new Schema({ id: String });
+  },
+
+  'allow disabling the auto .id virtual': function () {
+    var schema = new Schema({ name: String }, { noVirtualId: true });
+    should.strictEqual(undefined, schema.virtuals.id);
   }
 
 };
