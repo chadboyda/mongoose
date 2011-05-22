@@ -3259,26 +3259,116 @@ module.exports = {
 
   'setting profiling levels': function () {
     var db = start();
-    db.on('open', function () {
-      db.setProfiling(3, function (err) {
-        err.message.should.eql('Invalid profiling level: 3');
-        db.setProfiling('fail', function (err) {
-          err.message.should.eql('Invalid profiling level: fail');
-          db.setProfiling(2, function (err, doc) {
+    db.setProfiling(3, function (err) {
+      err.message.should.eql('Invalid profiling level: 3');
+      db.setProfiling('fail', function (err) {
+        err.message.should.eql('Invalid profiling level: fail');
+        db.setProfiling(2, function (err, doc) {
+          should.strictEqual(err, null);
+          db.setProfiling(1, 50, function (err, doc) {
             should.strictEqual(err, null);
-            db.setProfiling(1, 50, function (err, doc) {
+            doc.was.should.eql(2);
+            db.setProfiling(0, function (err, doc) {
+              db.close();
               should.strictEqual(err, null);
-              doc.was.should.eql(2);
-              db.setProfiling(0, function (err, doc) {
-                db.close();
-                should.strictEqual(err, null);
-                doc.was.should.eql(1);
-                doc.slowms.should.eql(50);
-              });
+              doc.was.should.eql(1);
+              doc.slowms.should.eql(50);
             });
           });
         });
       });
-    })
+    });
+  },
+
+  'test post hooks on embedded documents': function(){
+    var save = false,
+        init = false,
+        remove = false;
+
+    var EmbeddedSchema = new Schema({
+      title : String
+    });
+
+    var ParentSchema = new Schema({
+      embeds : [EmbeddedSchema]
+    });
+
+    EmbeddedSchema.post('save', function(next){
+      save = true;
+    });
+
+    // Don't know how to test those on a embedded document.
+    /*
+
+    EmbeddedSchema.post('init', function () {
+      init = true;
+    });
+
+    EmbeddedSchema.post('remove', function () {
+      remove = true;
+    });
+
+    */
+
+    mongoose.model('Parent', ParentSchema);
+
+    var db = start(),
+        Parent = db.model('Parent');
+
+    var parent = new Parent();
+
+    parent.embeds.push({title: 'Testing post hooks for embedded docs'});
+
+    parent.save(function(err){
+      db.close();
+      should.strictEqual(err, null);
+      save.should.be.true;
+    });
+  },
+
+  'console.log shows helpful values': function () {
+    var db = start()
+      , BlogPost = db.model('BlogPost', collection);
+
+    var date = new Date(1305730951086);
+    var id0 = new DocumentObjectId('4dd3e169dbfb13b4570000b9');
+    var id1 = new DocumentObjectId('4dd3e169dbfb13b4570000b6');
+    var id2 = new DocumentObjectId('4dd3e169dbfb13b4570000b7');
+    var id3 = new DocumentObjectId('4dd3e169dbfb13b4570000b8');
+
+    var post = new BlogPost({
+        title: 'Test'
+      , _id: id0
+      , date: date
+      , numbers: [5,6,7]
+      , owners: [id1]
+      , meta: { visitors: 45 }
+      , comments: [
+          { _id: id2, title: 'my comment', date: date, body: 'this is a comment' },
+          { _id: id3, title: 'the next thang', date: date, body: 'this is a comment too!' }]
+    });
+
+    db.close();
+
+    var a = '{ meta: { visitors: 45 },\n  numbers: [ 5, 6, 7 ],\n  owners: [ 4dd3e169dbfb13b4570000b6 ],\n  comments: \n   [{ _id: 4dd3e169dbfb13b4570000b7,\n     comments: [],\n     body: \'this is a comment\',\n     date: Wed, 18 May 2011 15:02:31 GMT,\n     title: \'my comment\' }\n   { _id: 4dd3e169dbfb13b4570000b8,\n     comments: [],\n     body: \'this is a comment too!\',\n     date: Wed, 18 May 2011 15:02:31 GMT,\n     title: \'the next thang\' }],\n  _id: 4dd3e169dbfb13b4570000b9,\n  date: Wed, 18 May 2011 15:02:31 GMT,\n  title: \'Test\' }'
+
+    post.inspect().should.eql(a);
+  },
+
+  'path can be used as pathname': function () {
+    var db = start()
+      , P = db.model('pathnametest', new Schema({ path: String }))
+    db.close();
+
+    var threw = false;
+    try {
+      new P({ path: 'i should not throw' });
+    } catch (err) {
+      threw = true;
+    }
+
+    threw.should.be.false;
+
   }
+
 };
